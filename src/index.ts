@@ -4,16 +4,45 @@ import * as sass from "sass.js";
 import path from "path-browserify";
 import { ERRORS } from "toypack/utils";
 
-// const depMap: Record<string, Set<string>> = {};
+type DepMap = Record<string, Set<string>>;
+
+const bundlersMap: Record<
+   string,
+   {
+      bundler: Toypack;
+      depMap: DepMap;
+   }
+> = {};
+
+sass.importer((request: any, done: Function) => {
+   const split = request.previous.split(".");
+   const bundlerId = split[0];
+   const { bundler, depMap } = bundlersMap[bundlerId];
+   const importer = split.slice(1).join(".");
+   const sourceToResolve = request.current;
+   const resolvedSource = bundler.resolve(sourceToResolve, {
+      baseDir: path.dirname(importer),
+   });
+   const resolvedAsset = bundler.getAsset(resolvedSource || "");
+   if (!resolvedAsset) {
+      done({
+         error: ERRORS.resolveFailure(sourceToResolve, importer),
+      });
+   } else {
+      depMap[importer] ??= new Set();
+      depMap[importer].add(resolvedAsset.source);
+      const resolvedContent = resolvedAsset.content || "";
+      done({
+         content: resolvedContent,
+      });
+   }
+});
 
 export default function (): Plugin {
    let bundler: Toypack;
-   let setCache: BuildHookContext["setCache"];
-   let getCache: BuildHookContext["getCache"];
-   let removeCache: BuildHookContext["removeCache"];
+   let depMap: DepMap;
 
    function setDepImporterModifiedFlagToTrue(depSource: string) {
-      const depMap = getCache<Record<string, Set<string>>>("depMap")!;
       for (const [importer, imports] of Object.entries(depMap)) {
          if (imports.has(depSource)) {
             const importerAsset = bundler.getAsset(importer);
@@ -22,28 +51,6 @@ export default function (): Plugin {
          }
       }
    }
-
-   sass.importer((request: any, done: Function) => {
-      const sourceToResolve = request.current;
-      const importer = request.previous;
-      const resolvedSource = bundler.resolve(sourceToResolve, {
-         baseDir: path.dirname(importer),
-      });
-      const resolvedAsset = bundler.getAsset(resolvedSource || "");
-      if (!resolvedAsset) {
-         done({
-            error: ERRORS.resolveFailure(sourceToResolve, importer),
-         });
-      } else {
-         const depMap = getCache<Record<string, Set<string>>>("depMap")!;
-         depMap[importer] ??= new Set();
-         depMap[importer].add(resolvedAsset.source);
-         const resolvedContent = resolvedAsset.content || "";
-         done({
-            content: resolvedContent,
-         });
-      }
-   });
 
    return {
       name: "sass-plugin",
@@ -54,10 +61,11 @@ export default function (): Plugin {
       loaders: [sassLoader()],
       setup() {
          bundler = this.bundler;
-         setCache = this.setCache;
-         getCache = this.getCache;
-         removeCache = this.removeCache;
-         setCache("depMap", {});
+         depMap = this.setCache<DepMap>("depMap", {});
+         bundlersMap[bundler.id] = {
+            bundler,
+            depMap
+         };
 
          /**
           * The sass compiler merges the dependencies of a sass file in it.
@@ -79,7 +87,6 @@ export default function (): Plugin {
 
          // Remove in map if deleted
          bundler.onRemoveAsset((event) => {
-            const depMap = getCache<Record<string, Set<string>>>("depMap")!;
             const asset: Asset = event.asset;
             setDepImporterModifiedFlagToTrue(asset.source);
 

@@ -4,14 +4,19 @@ import * as sass from "sass.js";
 function compileSass(
    source: string,
    content: string,
-   isIndentedSyntax: boolean
+   isIndentedSyntax: boolean,
+   bundlerId: string
 ): Promise<any> {
    return new Promise((resolve) => {
       sass.compile(
          content,
          {
             indentedSyntax: isIndentedSyntax,
-            inputPath: source,
+            /**
+             * This is ugly but it's the only way we can pass the bundler
+             * id to sass importer
+             */
+            inputPath: `${bundlerId}.${source}`,
          },
          (result: any) => {
             resolve(result);
@@ -37,7 +42,8 @@ export default function (): Loader {
             const result = await compileSass(
                moduleInfo.source,
                moduleInfo.content,
-               moduleInfo.lang == "sass"
+               moduleInfo.lang == "sass",
+               this.bundler.id
             );
             
             if (result.status != 0) {
