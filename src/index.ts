@@ -1,4 +1,4 @@
-import { Plugin, Toypack, Asset, BuildHookContext } from "toypack/types";
+import { Plugin, Toypack, Asset } from "toypack/types";
 import sassLoader from "./loader.js";
 import * as sass from "sass.js";
 import path from "path-browserify";
@@ -38,19 +38,23 @@ sass.importer((request: any, done: Function) => {
    }
 });
 
+function setDepImporterModifiedFlagToTrue(
+   bundler: Toypack,
+   depMap: DepMap,
+   depSource: string
+) {
+   for (const [importer, imports] of Object.entries(depMap)) {
+      if (imports.has(depSource)) {
+         const importerAsset = bundler.getAsset(importer);
+         if (!importerAsset) return;
+         importerAsset.modified = true;
+      }
+   }
+}
+
 export default function (): Plugin {
    let bundler: Toypack;
    let depMap: DepMap;
-
-   function setDepImporterModifiedFlagToTrue(depSource: string) {
-      for (const [importer, imports] of Object.entries(depMap)) {
-         if (imports.has(depSource)) {
-            const importerAsset = bundler.getAsset(importer);
-            if (!importerAsset) return;
-            importerAsset.modified = true;
-         }
-      }
-   }
 
    return {
       name: "sass-plugin",
@@ -64,7 +68,7 @@ export default function (): Plugin {
          depMap = this.setCache<DepMap>("depMap", {});
          bundlersMap[bundler.id] = {
             bundler,
-            depMap
+            depMap,
          };
 
          /**
@@ -82,13 +86,13 @@ export default function (): Plugin {
           */
          bundler.onAddOrUpdateAsset((event) => {
             const asset: Asset = event.asset;
-            setDepImporterModifiedFlagToTrue(asset.source);
+            setDepImporterModifiedFlagToTrue(bundler, depMap, asset.source);
          });
 
          // Remove in map if deleted
          bundler.onRemoveAsset((event) => {
             const asset: Asset = event.asset;
-            setDepImporterModifiedFlagToTrue(asset.source);
+            setDepImporterModifiedFlagToTrue(bundler, depMap, asset.source);
 
             if (asset.source in depMap) {
                delete depMap[asset.source];
