@@ -1,0 +1,21 @@
+{
+   "include": ["./src/**/*.ts"],
+   "exclude": ["./test/**/*"],
+   "compilerOptions": {
+      "lib": ["es2022", "dom"],
+      "module": "esnext",
+      "target": "es2022",
+      "moduleResolution": "nodenext",
+      "rootDir": "./src",
+      "outDir": "build",
+      "baseUrl": ".",
+      "strict": true,
+      "sourceMap": true,
+      "esModuleInterop": true,
+      "allowSyntheticDefaultImports": true,
+      "skipLibCheck": true,
+      "forceConsistentCasingInFileNames": true,
+      "declaration": true,
+      "resolveJsonModule": true
+   }
+}
