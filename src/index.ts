@@ -84,14 +84,12 @@ export default function (): Plugin {
           * sass file. We need to manually mark its importer's asset to
           * modified so that it can be recompiled.
           */
-         bundler.onAddOrUpdateAsset((event) => {
-            const asset: Asset = event.asset;
+         bundler.onAddOrUpdateAsset((asset) => {
             setDepImporterModifiedFlagToTrue(bundler, depMap, asset.source);
          });
 
          // Remove in map if deleted
-         bundler.onRemoveAsset((event) => {
-            const asset: Asset = event.asset;
+         bundler.onRemoveAsset((asset) => {
             setDepImporterModifiedFlagToTrue(bundler, depMap, asset.source);
 
             if (asset.source in depMap) {
