@@ -1,4 +1,5 @@
 const path = require("path");
+const NodePolyfillPlugin = require("node-polyfill-webpack-plugin");
 
 const libraryName = "ToypackSass";
 module.exports = {
@@ -8,6 +9,9 @@ module.exports = {
       extensions: [".js", ".ts"],
       extensionAlias: {
          ".js": [".js", ".ts"],
+      },
+      fallback: {
+         fs: false,
       },
    },
    module: {
@@ -29,4 +33,5 @@ module.exports = {
       clean: true,
    },
    devtool: "source-map",
+   plugins: [new NodePolyfillPlugin()],
 };

@@ -1,7 +1,6 @@
-import { Plugin, Toypack, Asset } from "toypack/types";
-import sassLoader from "./loader.js";
 import * as sass from "sass.js";
 import path from "path-browserify";
+import { Plugin, Toypack } from "toypack/types";
 import { ERRORS } from "toypack/utils";
 
 type DepMap = Record<string, Set<string>>;
@@ -38,6 +37,30 @@ sass.importer((request: any, done: Function) => {
    }
 });
 
+function compileSass(
+   source: string,
+   content: string,
+   isIndentedSyntax: boolean,
+   bundlerId: string
+): Promise<any> {
+   return new Promise((resolve) => {
+      sass.compile(
+         content,
+         {
+            indentedSyntax: isIndentedSyntax,
+            /**
+             * This is ugly but it's the only way we can pass the bundler
+             * id to sass importer
+             */
+            inputPath: `${bundlerId}.${source}`,
+         },
+         (result: any) => {
+            resolve(result);
+         }
+      );
+   });
+}
+
 function setDepImporterModifiedFlagToTrue(
    bundler: Toypack,
    depMap: DepMap,
@@ -62,10 +85,9 @@ export default function (): Plugin {
          ["style", ".sass"],
          ["style", ".scss"],
       ],
-      loaders: [sassLoader()],
       setup() {
          bundler = this.bundler;
-         depMap = this.setCache<DepMap>("depMap", {});
+         depMap = this.cache.set("depMap", {}).get("depMap")!;
          bundlersMap[bundler.id] = {
             bundler,
             depMap,
@@ -73,13 +95,12 @@ export default function (): Plugin {
 
          /**
           * The sass compiler merges the dependencies of a sass file in it.
-          * Having said that, we need to check for dependency changes ourselves
+          * Because of that, we need to check for dependency changes ourselves
           * because a sass file won't get recompiled unless the file itself
           * changes. We don't want this to happen because if one of its
           * dependency file changes, the main sass file will still use the
           * old contents of that dependency.
           *
-          * Solution:
           * If a module was modified, and that module is a dependency of a
           * sass file. We need to manually mark its importer's asset to
           * modified so that it can be recompiled.
@@ -96,6 +117,39 @@ export default function (): Plugin {
                delete depMap[asset.source];
             }
          });
+      },
+      load: {
+         async: true,
+         async handler(moduleInfo) {
+            if (!/\.s[ac]ss$/.test(moduleInfo.source.split("?")[0])) return;
+
+            if (
+               typeof moduleInfo.content != "string" ||
+               moduleInfo.type == "resource"
+            ) {
+               this.emitError("Blob contents are not supported.");
+               return;
+            }
+
+            const result = await compileSass(
+               moduleInfo.source,
+               moduleInfo.content,
+               moduleInfo.lang == "sass",
+               this.bundler.id
+            );
+
+            if (result.status != 0) {
+               let errorMsg = result.message;
+               if (errorMsg.length) errorMsg += "\n";
+               errorMsg += result.formatted.replace("Error:", "");
+               this.emitError(errorMsg);
+            } else {
+               return {
+                  content: result.text || "",
+                  map: result.map,
+               };
+            }
+         },
       },
    };
 }
