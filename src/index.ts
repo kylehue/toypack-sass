@@ -121,7 +121,8 @@ export default function (): Plugin {
       load: {
          async: true,
          async handler(moduleInfo) {
-            if (!/\.s[ac]ss$/.test(moduleInfo.source.split("?")[0])) return;
+            const sourceWithoutQuery = moduleInfo.source.split("?")[0];
+            if (!/\.s[ac]ss$/.test(sourceWithoutQuery)) return;
 
             if (
                typeof moduleInfo.content != "string" ||
@@ -134,7 +135,7 @@ export default function (): Plugin {
             const result = await compileSass(
                moduleInfo.source,
                moduleInfo.content,
-               moduleInfo.lang == "sass",
+               /\.sass$/.test(sourceWithoutQuery),
                this.bundler.id
             );
 
